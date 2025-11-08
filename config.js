@@ -21,9 +21,6 @@ const CONFIG = {
     // Number of trades to display in history
     MAX_TRADES_DISPLAY: 50,
     
-    // Number of days to show in daily reports
-    MAX_DAYS_DISPLAY: 30,
-    
     // Enable debug mode (logs to console)
     DEBUG_MODE: false
 };
