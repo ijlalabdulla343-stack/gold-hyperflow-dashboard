@@ -96,15 +96,106 @@
             </div>
         </div>
 
-        <!-- Charts Section -->
-        <div class="charts-section">
-            <div class="chart-container">
-                <h3 class="chart-title">📊 Recent Trades Performance</h3>
-                <canvas id="tradesChart"></canvas>
+        <!-- Advanced Performance Analytics Section -->
+        <div class="performance-section">
+            <h2 class="section-main-title">📊 ADVANCED TRADE PERFORMANCE ANALYTICS</h2>
+            
+            <!-- Performance Metrics Grid -->
+            <div class="performance-metrics">
+                <div class="metric-box">
+                    <div class="metric-icon">💰</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Total Net P/L</div>
+                        <div class="metric-value positive" id="totalNetPL">$0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">🏆</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Best Trade</div>
+                        <div class="metric-value positive" id="bestTrade">$0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">💔</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Worst Trade</div>
+                        <div class="metric-value negative" id="worstTrade">$0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">📈</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Avg Win</div>
+                        <div class="metric-value positive" id="avgWin">$0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">📉</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Avg Loss</div>
+                        <div class="metric-value negative" id="avgLoss">$0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">⚖️</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Profit Factor</div>
+                        <div class="metric-value" id="profitFactor">0.00</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">⏱️</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Avg Duration</div>
+                        <div class="metric-value" id="avgDuration">0m 0s</div>
+                    </div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-icon">🔢</div>
+                    <div class="metric-info">
+                        <div class="metric-label">Total Trades</div>
+                        <div class="metric-value" id="totalTrades">0</div>
+                    </div>
+                </div>
             </div>
-            <div class="chart-container">
-                <h3 class="chart-title">📈 Win/Loss Distribution</h3>
-                <canvas id="pieChart"></canvas>
+
+            <!-- Charts Grid -->
+            <div class="charts-grid">
+                <div class="chart-container-large">
+                    <h3 class="chart-title">📊 Equity Curve & Cumulative P/L</h3>
+                    <canvas id="equityCurveChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <h3 class="chart-title">📈 Trade P/L Distribution</h3>
+                    <canvas id="plDistributionChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <h3 class="chart-title">🎯 Win/Loss Ratio</h3>
+                    <canvas id="winLossChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <h3 class="chart-title">⏰ Trade Duration Analysis</h3>
+                    <canvas id="durationChart"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <h3 class="chart-title">📊 Trade Type Performance</h3>
+                    <canvas id="tradeTypeChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">🔥 Consecutive Wins/Losses</h3>
+                    <canvas id="streakChart"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <h3 class="chart-title">💹 Profit/Loss Trend</h3>
+                    <canvas id="plTrendChart"></canvas>
+                </div>
             </div>
         </div>
 
@@ -129,32 +220,6 @@
                     <tbody id="tradesTableBody">
                         <tr>
                             <td colspan="9" class="no-data">Loading trade data...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Daily Reports Section -->
-        <div class="table-section">
-            <h3 class="section-title">📅 Daily Reports (Last 30 Days)</h3>
-            <div class="table-wrapper">
-                <table id="dailyReportsTable">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Total Trades</th>
-                            <th>Wins</th>
-                            <th>Losses</th>
-                            <th>Win Rate</th>
-                            <th>Net P/L</th>
-                            <th>Best Trade</th>
-                            <th>Worst Trade</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dailyReportsTableBody">
-                        <tr>
-                            <td colspan="8" class="no-data">Loading daily reports...</td>
                         </tr>
                     </tbody>
                 </table>
