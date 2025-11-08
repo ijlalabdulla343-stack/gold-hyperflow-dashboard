@@ -1,7 +1,7 @@
 // Configuration for Gold HyperFlow Scalper Dashboard
 const CONFIG = {
     // Your Google Apps Script Web App URL
-    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzg3g1vCoPqOswbuzXeeQi6gO3zoA2GwQp850SD8gaf-nGYpT_X1azjZUOB2LkaTmUq/exec',
+    GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwN27ilgeFKlTekjFX_gWt91S3NezIrY6QRaZOPzqPFR9YW-iPPMiE2nw-b8X-N4-s/exec',
     
     // Update interval in milliseconds (5000 = 5 seconds)
     UPDATE_INTERVAL: 5000,
