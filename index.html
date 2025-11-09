@@ -5,190 +5,215 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gold HyperFlow Scalper - Live Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@2.0.0/dist/chartjs-plugin-streaming.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Material+Icons&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Top Bar -->
-    <div class="top-bar">
-        <div class="top-bar-content">
-            <div>
-                <div class="company-logo">ALGOMAXX</div>
-                <div class="company-tagline">Real-Time Trading Dashboard</div>
-            </div>
-            <div class="status-indicator">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="connectionStatus">Connecting...</span>
-            </div>
-        </div>
+    <!-- Animated Background -->
+    <div class="background-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
     </div>
 
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <div class="nav-left">
+                <div class="logo">
+                    <span class="material-icons logo-icon">analytics</span>
+                    <span class="logo-text">ALGOMAXX</span>
+                </div>
+                <div class="nav-subtitle">Real-Time Trading Intelligence</div>
+            </div>
+            <div class="nav-right">
+                <div class="connection-status" id="connectionStatus">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Connecting...</span>
+                </div>
+                <div class="last-update">
+                    <span class="material-icons">schedule</span>
+                    <span id="lastUpdate">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <!-- Main Container -->
-    <div class="container">
-        <!-- Header -->
-        <div class="header-section">
-            <h1 class="dashboard-title">🚀 GOLD HYPERFLOW SCALPER</h1>
-            <p class="dashboard-subtitle">Live Performance Monitoring</p>
-            <div class="last-update">Last Update: <span id="lastUpdate">--</span></div>
+    <div class="main-container">
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <h1 class="hero-title">
+                <span class="material-icons hero-icon">rocket_launch</span>
+                Gold HyperFlow Scalper
+            </h1>
+            <p class="hero-subtitle">Advanced AI-Powered Trading System</p>
         </div>
 
-        <!-- Live Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">💰</div>
-                <div class="stat-label">Balance</div>
-                <div class="stat-value" id="balance">$0.00</div>
+        <!-- Quick Stats Cards -->
+        <div class="quick-stats">
+            <div class="stat-card elevation-2">
+                <div class="stat-icon success-bg">
+                    <span class="material-icons">account_balance_wallet</span>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">Balance</div>
+                    <div class="stat-value" id="balance">$0.00</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon">📊</div>
-                <div class="stat-label">Equity</div>
-                <div class="stat-value" id="equity">$0.00</div>
+            <div class="stat-card elevation-2">
+                <div class="stat-icon info-bg">
+                    <span class="material-icons">trending_up</span>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">Equity</div>
+                    <div class="stat-value" id="equity">$0.00</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon">📈</div>
-                <div class="stat-label">Floating P/L</div>
-                <div class="stat-value" id="floatingPL">$0.00</div>
+            <div class="stat-card elevation-2">
+                <div class="stat-icon warning-bg">
+                    <span class="material-icons">show_chart</span>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">Floating P/L</div>
+                    <div class="stat-value" id="floatingPL">$0.00</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon">📅</div>
-                <div class="stat-label">Daily Trades</div>
-                <div class="stat-value" id="dailyTrades">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">✅</div>
-                <div class="stat-label">Wins</div>
-                <div class="stat-value positive" id="wins">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">❌</div>
-                <div class="stat-label">Losses</div>
-                <div class="stat-value negative" id="losses">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🎯</div>
-                <div class="stat-label">Win Rate</div>
-                <div class="stat-value" id="winRate">0%</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">💵</div>
-                <div class="stat-label">Daily P/L</div>
-                <div class="stat-value" id="dailyPL">$0.00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🔥</div>
-                <div class="stat-label">Consecutive Losses</div>
-                <div class="stat-value" id="consecLosses">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">📌</div>
-                <div class="stat-label">Open Positions</div>
-                <div class="stat-value" id="openPositions">0</div>
-            </div>
-            <div class="stat-card status-card">
-                <div class="stat-icon">⚡</div>
-                <div class="stat-label">EA Status</div>
-                <div class="stat-value" id="eaStatus">MONITORING</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🎲</div>
-                <div class="stat-label">Last Trade</div>
-                <div class="stat-value" id="lastTrade">NONE</div>
+            <div class="stat-card elevation-2">
+                <div class="stat-icon primary-bg">
+                    <span class="material-icons">assessment</span>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-label">Daily P/L</div>
+                    <div class="stat-value" id="dailyPL">$0.00</div>
+                </div>
             </div>
         </div>
 
-        <!-- Advanced Performance Analytics Section -->
-        <div class="performance-section">
-            <h2 class="section-main-title">📊 ADVANCED LIVE PERFORMANCE ANALYTICS</h2>
-            
-            <!-- Performance Metrics Grid -->
-            <div class="performance-metrics">
-                <div class="metric-box animate-fade-in">
-                    <div class="metric-icon">💰</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Current Equity</div>
-                        <div class="metric-value positive" id="currentEquity">$0.00</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.1s">
-                    <div class="metric-icon">📈</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Today's P/L</div>
-                        <div class="metric-value" id="todayPL">$0.00</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.2s">
-                    <div class="metric-icon">🏆</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Best Trade Today</div>
-                        <div class="metric-value positive" id="bestTradeToday">$0.00</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.3s">
-                    <div class="metric-icon">💔</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Worst Trade Today</div>
-                        <div class="metric-value negative" id="worstTradeToday">$0.00</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.4s">
-                    <div class="metric-icon">⚖️</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Live Profit Factor</div>
-                        <div class="metric-value" id="liveProfitFactor">0.00</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.5s">
-                    <div class="metric-icon">⏱️</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Avg Duration</div>
-                        <div class="metric-value" id="avgDurationLive">0m 0s</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.6s">
-                    <div class="metric-icon">🎯</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Live Win Rate</div>
-                        <div class="metric-value" id="liveWinRate">0%</div>
-                    </div>
-                </div>
-                <div class="metric-box animate-fade-in" style="animation-delay: 0.7s">
-                    <div class="metric-icon">🔢</div>
-                    <div class="metric-info">
-                        <div class="metric-label">Trades Today</div>
-                        <div class="metric-value" id="tradesToday">0</div>
-                    </div>
+        <!-- Real-Time Equity Chart -->
+        <div class="chart-section elevation-3">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span class="material-icons">timeline</span>
+                    Live Equity Curve
+                </h2>
+                <div class="chart-controls">
+                    <button class="btn-icon" onclick="toggleChartPause()" id="pauseBtn">
+                        <span class="material-icons">pause</span>
+                    </button>
+                    <button class="btn-icon" onclick="resetChart()">
+                        <span class="material-icons">refresh</span>
+                    </button>
                 </div>
             </div>
+            <div class="chart-container">
+                <canvas id="equityChart"></canvas>
+            </div>
+        </div>
 
-            <!-- Charts Grid -->
-            <div class="charts-grid">
-                <div class="chart-container-large animate-slide-up">
-                    <h3 class="chart-title">📊 Real-Time Equity Curve</h3>
-                    <canvas id="equityCurveChart"></canvas>
+        <!-- Performance Grid -->
+        <div class="performance-grid">
+            <div class="perf-card elevation-2">
+                <div class="perf-header">
+                    <span class="material-icons">calendar_today</span>
+                    <span>Daily Trades</span>
                 </div>
-                
-                <div class="chart-container animate-slide-up" style="animation-delay: 0.1s">
-                    <h3 class="chart-title">📈 Recent Trade P/L</h3>
-                    <canvas id="plDistributionChart"></canvas>
+                <div class="perf-value" id="dailyTrades">0</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header success">
+                    <span class="material-icons">check_circle</span>
+                    <span>Wins</span>
                 </div>
-                
-                <div class="chart-container animate-slide-up" style="animation-delay: 0.2s">
-                    <h3 class="chart-title">🎯 Win/Loss Ratio</h3>
-                    <canvas id="winLossChart"></canvas>
+                <div class="perf-value success" id="wins">0</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header danger">
+                    <span class="material-icons">cancel</span>
+                    <span>Losses</span>
                 </div>
+                <div class="perf-value danger" id="losses">0</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header primary">
+                    <span class="material-icons">target</span>
+                    <span>Win Rate</span>
+                </div>
+                <div class="perf-value primary" id="winRate">0%</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header warning">
+                    <span class="material-icons">local_fire_department</span>
+                    <span>Consecutive Losses</span>
+                </div>
+                <div class="perf-value warning" id="consecLosses">0</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header info">
+                    <span class="material-icons">location_on</span>
+                    <span>Open Positions</span>
+                </div>
+                <div class="perf-value info" id="openPositions">0</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header">
+                    <span class="material-icons">flash_on</span>
+                    <span>EA Status</span>
+                </div>
+                <div class="perf-status" id="eaStatus">MONITORING</div>
+            </div>
+            <div class="perf-card elevation-2">
+                <div class="perf-header">
+                    <span class="material-icons">swap_horiz</span>
+                    <span>Last Trade</span>
+                </div>
+                <div class="perf-status" id="lastTrade">NONE</div>
+            </div>
+        </div>
 
-                <div class="chart-container animate-slide-up" style="animation-delay: 0.3s">
-                    <h3 class="chart-title">🔥 Consecutive Wins/Losses</h3>
-                    <canvas id="streakChart"></canvas>
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            <div class="chart-section elevation-3">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="material-icons">bar_chart</span>
+                        Recent Performance
+                    </h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="tradesChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-section elevation-3">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span class="material-icons">donut_large</span>
+                        Win/Loss Ratio
+                    </h2>
+                </div>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
                 </div>
             </div>
         </div>
 
         <!-- Trade History Table -->
-        <div class="table-section">
-            <h3 class="section-title">📋 Recent Trade History (Last 50 Trades)</h3>
+        <div class="table-section elevation-3">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span class="material-icons">history</span>
+                    Trade History
+                </h2>
+                <div class="table-filter">
+                    <span class="material-icons">filter_list</span>
+                    <span>Last 50 Trades</span>
+                </div>
+            </div>
             <div class="table-wrapper">
-                <table id="tradesTable">
+                <table class="data-table">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -204,7 +229,10 @@
                     </thead>
                     <tbody id="tradesTableBody">
                         <tr>
-                            <td colspan="9" class="no-data">Loading trade data...</td>
+                            <td colspan="9" class="no-data">
+                                <span class="material-icons">hourglass_empty</span>
+                                <span>Loading trade data...</span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -213,11 +241,19 @@
     </div>
 
     <!-- Footer -->
-    <div class="footer">
-        <div class="footer-logo">ALGOMAXX</div>
-        <div class="footer-text">Gold HyperFlow Scalper - Professional Trading System</div>
-        <div class="footer-text">Auto-updates every 5 seconds • Powered by Google Sheets & GitHub Pages</div>
-    </div>
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="material-icons">analytics</span>
+                <span>ALGOMAXX</span>
+            </div>
+            <div class="footer-text">Gold HyperFlow Scalper - Professional Trading System</div>
+            <div class="footer-tech">
+                <span class="material-icons">cloud</span>
+                <span>Powered by Google Sheets & Real-Time Analytics</span>
+            </div>
+        </div>
+    </footer>
 
     <script src="config.js"></script>
     <script src="app.js"></script>
