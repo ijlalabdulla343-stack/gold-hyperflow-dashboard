@@ -1,1319 +1,295 @@
-// Gold HyperFlow Scalper - Live Dashboard JavaScript
-let equityCurveChart = null;
-let plDistributionChart = null;
-let winLossChart = null;
-let streakChart = null;
-let updateInterval = null;
+/**
+ * Gold HyperFlow Scalper - Advanced Dashboard
+ * Version: 3.0 - Real-Time Streaming
+ */
+
+// Global chart instances
+let equityChart = null;
+let tradesChart = null;
+let pieChart = null;
+
+// Update intervals
+let statsUpdateInterval = null;
+let chartPaused = false;
+
+// Data cache
+let equityData = [];
 let lastUpdateTime = null;
-let equityHistory = [];
-let startingBalance = 0;
 
-// Debug logger
-function debug(message, data = null) {
-    if (CONFIG.DEBUG_MODE) {
-        console.log(`[GHFS Dashboard] ${message}`, data || '');
-    }
+/* ==========================================
+   INITIALIZATION
+   ========================================== */
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('%c🚀 Gold HyperFlow Scalper Dashboard', 'color: #1a73e8; font-size: 24px; font-weight: bold');
+    console.log('%c📊 Version 3.0 - Real-Time Analytics', 'color: #34a853; font-size: 14px');
+    console.log('%c🔗 Script URL:', 'color: #fbbc04', CONFIG.GOOGLE_SCRIPT_URL);
+    
+    // Initialize Chart.js defaults
+    initChartDefaults();
+    
+    // Create all charts
+    createEquityChart();
+    createTradesChart();
+    createPieChart();
+    
+    // Initial data load
+    updateAllData();
+    
+    // Start auto-update
+    startAutoUpdate();
+    
+    // Handle page visibility
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    console.log('%c✅ Dashboard initialized successfully', 'color: #34a853; font-weight: bold');
+});
+
+/* ==========================================
+   CHART INITIALIZATION
+   ========================================== */
+
+function initChartDefaults() {
+    Chart.defaults.color = '#8b949e';
+    Chart.defaults.borderColor = '#30363d';
+    Chart.defaults.font.family = "'Roboto', sans-serif";
+    Chart.defaults.plugins.legend.labels.usePointStyle = true;
+    Chart.defaults.plugins.legend.labels.padding = 20;
+    Chart.defaults.elements.point.radius = 0;
+    Chart.defaults.elements.point.hoverRadius = 6;
 }
 
-// Format currency
-function formatCurrency(value) {
-    const num = parseFloat(value) || 0;
-    return '
+/* ==========================================
+   REAL-TIME EQUITY CHART
+   ========================================== */
 
-// Debug logger
-function debug(message, data = null) {
-    if (CONFIG.DEBUG_MODE) {
-        console.log(`[GHFS Dashboard] ${message}`, data || '');
-    }
-}
-
-// Format currency
-function formatCurrency(value) {
-    const num = parseFloat(value) || 0;
-    return '$' + num.toFixed(2);
-}
-
-// Format percentage
-function formatPercent(value) {
-    const num = parseFloat(value) || 0;
-    return num.toFixed(1) + '%';
-}
-
-// Format date
-function formatDate(dateString) {
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-    } catch (e) {
-        return dateString;
-    }
-}
-
-// Format duration
-function formatDuration(seconds) {
-    const sec = parseInt(seconds) || 0;
-    const minutes = Math.floor(sec / 60);
-    const remainingSeconds = sec % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-}
-
-// Update connection status
-function updateConnectionStatus(connected) {
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('connectionStatus');
-    
-    if (connected) {
-        statusDot.classList.remove('disconnected');
-        statusText.textContent = 'Connected';
-    } else {
-        statusDot.classList.add('disconnected');
-        statusText.textContent = 'Disconnected';
-    }
-}
-
-// Fetch data from Google Apps Script
-async function fetchData(action) {
-    try {
-        const url = `${CONFIG.GOOGLE_SCRIPT_URL}?action=${action}`;
-        debug(`Fetching ${action}...`);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debug(`${action} response:`, data);
-        
-        if (data.status === 'success') {
-            return data.data;
-        } else {
-            throw new Error(data.message || 'Unknown error');
-        }
-    } catch (error) {
-        console.error(`Error fetching ${action}:`, error);
-        return null;
-    }
-}
-
-
-
-// Update live statistics
-async function updateLiveStats() {
-    const stats = await fetchData('getLiveStats');
-    
-    if (!stats) {
-        updateConnectionStatus(false);
-        return;
-    }
-    
-    updateConnectionStatus(true);
-    
-    // Update all stat cards
-    document.getElementById('balance').textContent = formatCurrency(stats.Balance);
-    document.getElementById('equity').textContent = formatCurrency(stats.Equity);
-    
-    const floatingPL = parseFloat(stats['Floating P/L']) || 0;
-    const floatingEl = document.getElementById('floatingPL');
-    floatingEl.textContent = formatCurrency(floatingPL);
-    floatingEl.className = 'stat-value ' + (floatingPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('dailyTrades').textContent = stats['Daily Trades'] || '0';
-    document.getElementById('wins').textContent = stats['Daily Wins'] || '0';
-    document.getElementById('losses').textContent = stats['Daily Losses'] || '0';
-    document.getElementById('winRate').textContent = formatPercent(stats['Win Rate']);
-    
-    const dailyPL = parseFloat(stats['Daily P/L']) || 0;
-    const dailyPLEl = document.getElementById('dailyPL');
-    dailyPLEl.textContent = formatCurrency(dailyPL);
-    dailyPLEl.className = 'stat-value ' + (dailyPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('consecLosses').textContent = stats['Consecutive Losses'] || '0';
-    document.getElementById('openPositions').textContent = stats['Open Positions'] || '0';
-    
-    // Update EA status
-    const statusEl = document.getElementById('eaStatus');
-    const status = stats.Status || 'UNKNOWN';
-    statusEl.textContent = status;
-    statusEl.className = 'stat-value';
-    
-    if (status === 'MONITORING' || status === 'IN_POSITION') {
-        statusEl.classList.add('positive');
-    } else if (status === 'LOCKOUT' || status === 'LIMIT_REACHED') {
-        statusEl.classList.add('negative');
-    }
-    
-    // Update last trade
-    const lastTradeDirection = stats['Last Trade Direction'] || 'NONE';
-    const lastTradeProfit = parseFloat(stats['Last Trade Profit']) || 0;
-    const lastTradeEl = document.getElementById('lastTrade');
-    
-    if (lastTradeDirection !== 'NONE') {
-        lastTradeEl.textContent = `${lastTradeDirection} (${formatCurrency(lastTradeProfit)})`;
-        lastTradeEl.className = 'stat-value ' + (lastTradeProfit >= 0 ? 'positive' : 'negative');
-    } else {
-        lastTradeEl.textContent = 'NONE';
-        lastTradeEl.className = 'stat-value';
-    }
-    
-    // Update last update time
-    const now = new Date();
-    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
-    
-    lastUpdateTime = now;
-}
-
-// Update trade history
-async function updateTradeHistory() {
-    const trades = await fetchData(`getTradeHistory&limit=${CONFIG.MAX_TRADES_DISPLAY}`);
-    
-    if (!trades || trades.length === 0) {
-        document.getElementById('tradesTableBody').innerHTML = 
-            '<tr><td colspan="9" class="no-data">No trades recorded yet</td></tr>';
-        return;
-    }
-    
-    allTradesData = trades;
-    
-    let html = '';
-    trades.forEach((trade, index) => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
-        const profitSymbol = profit >= 0 ? '+' : '';
-        
-        html += `<tr>
-            <td>${index + 1}</td>
-            <td><span class="type-${trade.Type}">${trade.Type}</span></td>
-            <td>${formatDate(trade['Open Time'])}</td>
-            <td>${formatDate(trade['Close Time'])}</td>
-            <td>${parseFloat(trade['Open Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade['Close Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade.Lots).toFixed(2)}</td>
-            <td class="${profitClass}">${profitSymbol}${formatCurrency(profit)}</td>
-            <td>${formatDuration(trade.Duration)}</td>
-        </tr>`;
-    });
-    
-    document.getElementById('tradesTableBody').innerHTML = html;
-    
-    // Calculate and update performance metrics
-    const metrics = calculatePerformanceMetrics(trades);
-    updatePerformanceMetrics(metrics);
-    
-    // Update all charts with trade data
-    updateAllCharts(trades);
-}
-
-// Update Equity Curve Chart
-function updateEquityCurveChart(trades) {
-    const ctx = document.getElementById('equityCurveChart');
+function createEquityChart() {
+    const ctx = document.getElementById('equityChart');
     if (!ctx) return;
     
-    if (equityCurveChart) {
-        equityCurveChart.destroy();
-    }
-    
-    // Calculate cumulative P/L
-    let cumulative = 0;
-    const labels = ['Start'];
-    const data = [0];
-    
-    trades.slice().reverse().forEach((trade, idx) => {
-        cumulative += parseFloat(trade.Profit) || 0;
-        labels.push(`T${idx + 1}`);
-        data.push(cumulative);
-    });
-    
-    equityCurveChart = new Chart(ctx, {
+    equityChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
-            datasets: [{
-                label: 'Cumulative P/L ($)',
-                data: data,
-                borderColor: CONFIG.COLORS.primary,
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Cumulative P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6',
-                        maxRotation: 45,
-                        minRotation: 0
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update P/L Distribution Chart
-function updatePLDistributionChart(trades) {
-    const ctx = document.getElementById('plDistributionChart');
-    if (!ctx) return;
-    
-    if (plDistributionChart) {
-        plDistributionChart.destroy();
-    }
-    
-    const recent20 = trades.slice(0, 20).reverse();
-    const labels = recent20.map((_, idx) => `T${idx + 1}`);
-    const profits = recent20.map(trade => parseFloat(trade.Profit) || 0);
-    const colors = profits.map(p => p >= 0 ? CONFIG.COLORS.success : CONFIG.COLORS.danger);
-    
-    plDistributionChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'P/L ($)',
-                data: profits,
-                backgroundColor: colors,
-                borderColor: colors,
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update Win/Loss Chart
-function updateWinLossChart(trades) {
-    const ctx = document.getElementById('winLossChart');
-    if (!ctx) return;
-    
-    if (winLossChart) {
-        winLossChart.destroy();
-    }
-    
-    let wins = 0, losses = 0;
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        if (profit > 0) wins++;
-        else if (profit < 0) losses++;
-    });
-    
-    winLossChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [`Wins (${wins})`, `Losses (${losses})`],
-            datasets: [{
-                data: [wins, losses],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.8)',
-                    'rgba(248, 113, 113, 0.8)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12
-                }
-            }
-        }
-    });
-}
-
-// Update Duration Analysis Chart
-function updateDurationChart(trades) {
-    const ctx = document.getElementById('durationChart');
-    if (!ctx) return;
-    
-    if (durationChart) {
-        durationChart.destroy();
-    }
-    
-    const recent15 = trades.slice(0, 15).reverse();
-    const labels = recent15.map((_, idx) => `T${idx + 1}`);
-    const durations = recent15.map(trade => (parseInt(trade.Duration) || 0) / 60); // Convert to minutes
-    
-    durationChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Duration (minutes)',
-                data: durations,
-                borderColor: CONFIG.COLORS.warning,
-                backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointHoverRadius: 7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Duration: ' + context.parsed.y.toFixed(1) + ' min';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return value.toFixed(1) + 'm';
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update Trade Type Performance Chart
-function updateTradeTypeChart(trades) {
-    const ctx = document.getElementById('tradeTypeChart');
-    if (!ctx) return;
-    
-    if (tradeTypeChart) {
-        tradeTypeChart.destroy();
-    }
-    
-    let buyProfit = 0, sellProfit = 0;
-    let buyCount = 0, sellCount = 0;
-    
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        if (trade.Type === 'BUY') {
-            buyProfit += profit;
-            buyCount++;
-        } else if (trade.Type === 'SELL') {
-            sellProfit += profit;
-            sellCount++;
-        }
-    });
-    
-    tradeTypeChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [`BUY (${buyCount})`, `SELL (${sellCount})`],
-            datasets: [{
-                label: 'Total P/L ($)',
-                data: [buyProfit, sellProfit],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.6)',
-                    'rgba(248, 113, 113, 0.6)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update Streak Chart
-function updateStreakChart(trades) {
-    const ctx = document.getElementById('streakChart');
-    if (!ctx) return;
-    
-    if (streakChart) {
-        streakChart.destroy();
-    }
-    
-    let currentStreak = 0;
-    let maxWinStreak = 0;
-    let maxLossStreak = 0;
-    let lastWasWin = null;
-    
-    trades.slice().reverse().forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const isWin = profit > 0;
-        
-        if (lastWasWin === null || lastWasWin === isWin) {
-            currentStreak++;
-        } else {
-            if (lastWasWin) {
-                maxWinStreak = Math.max(maxWinStreak, currentStreak);
-            } else {
-                maxLossStreak = Math.max(maxLossStreak, currentStreak);
-            }
-            currentStreak = 1;
-        }
-        lastWasWin = isWin;
-    });
-    
-    if (lastWasWin) {
-        maxWinStreak = Math.max(maxWinStreak, currentStreak);
-    } else if (lastWasWin === false) {
-        maxLossStreak = Math.max(maxLossStreak, currentStreak);
-    }
-    
-    streakChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Max Win Streak', 'Max Loss Streak'],
-            datasets: [{
-                label: 'Streak Length',
-                data: [maxWinStreak, maxLossStreak],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.6)',
-                    'rgba(248, 113, 113, 0.6)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Streak: ' + context.parsed.y + ' trades';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        stepSize: 1
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update P/L Trend Chart
-function updatePLTrendChart(trades) {
-    const ctx = document.getElementById('plTrendChart');
-    if (!ctx) return;
-    
-    if (plTrendChart) {
-        plTrendChart.destroy();
-    }
-    
-    const recent20 = trades.slice(0, 20).reverse();
-    const labels = recent20.map((_, idx) => `T${idx + 1}`);
-    const profits = recent20.map(trade => parseFloat(trade.Profit) || 0);
-    
-    // Calculate moving average (5-trade MA)
-    const movingAvg = [];
-    for (let i = 0; i < profits.length; i++) {
-        const start = Math.max(0, i - 4);
-        const slice = profits.slice(start, i + 1);
-        const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-        movingAvg.push(avg);
-    }
-    
-    plTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
             datasets: [
                 {
-                    label: 'Trade P/L',
-                    data: profits,
-                    borderColor: CONFIG.COLORS.info,
-                    backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                },
-                {
-                    label: '5-Trade MA',
-                    data: movingAvg,
-                    borderColor: CONFIG.COLORS.warning,
-                    backgroundColor: 'transparent',
+                    label: 'Balance',
+                    data: [],
+                    borderColor: '#1a73e8',
+                    backgroundColor: 'rgba(26, 115, 232, 0.1)',
                     borderWidth: 3,
+                    fill: true,
                     tension: 0.4,
                     pointRadius: 0,
-                    borderDash: [5, 5]
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#1a73e8',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
+                },
+                {
+                    label: 'Equity',
+                    data: [],
+                    borderColor: '#34a853',
+                    backgroundColor: 'rgba(52, 168, 83, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#34a853',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
                 }
             ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update all charts
-function updateAllCharts(trades) {
-    if (!trades || trades.length === 0) return;
-    
-    updateEquityCurveChart(trades);
-    updatePLDistributionChart(trades);
-    updateWinLossChart(trades);
-    updateDurationChart(trades);
-    updateTradeTypeChart(trades);
-    updateStreakChart(trades);
-    updatePLTrendChart(trades);
-}
-
-// Update all data
-async function updateAll() {
-    debug('Updating all data...');
-    await Promise.all([
-        updateLiveStats(),
-        updateTradeHistory()
-    ]);
-    debug('All data updated');
-}
-
-// Initialize dashboard
-function initDashboard() {
-    debug('Initializing dashboard...');
-    
-    // Set Chart.js defaults
-    Chart.defaults.color = '#b0b7c3';
-    Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
-    Chart.defaults.font.family = "'Inter', sans-serif";
-    
-    // Initial update
-    updateAll();
-    
-    // Set up auto-update
-    if (updateInterval) {
-        clearInterval(updateInterval);
-    }
-    
-    updateInterval = setInterval(() => {
-        updateAll();
-    }, CONFIG.UPDATE_INTERVAL);
-    
-    debug(`Auto-update enabled (${CONFIG.UPDATE_INTERVAL}ms interval)`);
-}
-
-// Start dashboard when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Gold HyperFlow Scalper Dashboard - Initializing...');
-    console.log('Google Script URL:', CONFIG.GOOGLE_SCRIPT_URL);
-    
-    initDashboard();
-    
-    // Handle visibility change to pause/resume updates
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            debug('Page hidden - pausing updates');
-            if (updateInterval) {
-                clearInterval(updateInterval);
-            }
-        } else {
-            debug('Page visible - resuming updates');
-            initDashboard();
-        }
-    });
-});
-
-// Handle errors globally
-window.addEventListener('error', function(event) {
-    console.error('Dashboard error:', event.error);
-});
-
-window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
-}); + num.toFixed(2);
-}
-
-// Format percentage
-function formatPercent(value) {
-    const num = parseFloat(value) || 0;
-    return num.toFixed(1) + '%';
-}
-
-// Format date
-function formatDate(dateString) {
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-    } catch (e) {
-        return dateString;
-    }
-}
-
-// Format duration
-function formatDuration(seconds) {
-    const sec = parseInt(seconds) || 0;
-    const minutes = Math.floor(sec / 60);
-    const remainingSeconds = sec % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-}
-
-// Update connection status
-function updateConnectionStatus(connected) {
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('connectionStatus');
-    
-    if (connected) {
-        statusDot.classList.remove('disconnected');
-        statusText.textContent = 'Connected';
-    } else {
-        statusDot.classList.add('disconnected');
-        statusText.textContent = 'Disconnected';
-    }
-}
-
-// Fetch data from Google Apps Script
-async function fetchData(action) {
-    try {
-        const url = `${CONFIG.GOOGLE_SCRIPT_URL}?action=${action}&t=${Date.now()}`;
-        debug(`Fetching ${action}...`);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        debug(`${action} response:`, data);
-        
-        if (data.status === 'success') {
-            return data.data;
-        } else {
-            throw new Error(data.message || 'Unknown error');
-        }
-    } catch (error) {
-        console.error(`Error fetching ${action}:`, error);
-        return null;
-    }
-}
-
-// Calculate live performance metrics from current stats
-function calculateLiveMetrics(stats, todaysTrades) {
-    const dailyWins = parseInt(stats['Daily Wins']) || 0;
-    const dailyLosses = parseInt(stats['Daily Losses']) || 0;
-    const totalTrades = dailyWins + dailyLosses;
-    const winRate = totalTrades > 0 ? (dailyWins / totalTrades * 100) : 0;
-    const dailyPL = parseFloat(stats['Daily P/L']) || 0;
-    
-    let bestTrade = 0;
-    let worstTrade = 0;
-    let totalDuration = 0;
-    let totalProfit = 0;
-    let totalLoss = 0;
-    
-    if (todaysTrades && todaysTrades.length > 0) {
-        todaysTrades.forEach(trade => {
-            const profit = parseFloat(trade.Profit) || 0;
-            const duration = parseInt(trade.Duration) || 0;
-            
-            totalDuration += duration;
-            
-            if (profit > 0) {
-                totalProfit += profit;
-                if (profit > bestTrade) bestTrade = profit;
-            } else if (profit < 0) {
-                totalLoss += Math.abs(profit);
-                if (profit < worstTrade) worstTrade = profit;
-            }
-        });
-    }
-    
-    const avgDuration = totalTrades > 0 ? totalDuration / totalTrades : 0;
-    const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : (totalProfit > 0 ? 999 : 0);
-    
-    return {
-        equity: parseFloat(stats.Equity) || 0,
-        dailyPL,
-        bestTrade,
-        worstTrade,
-        profitFactor,
-        avgDuration,
-        winRate,
-        totalTrades
-    };
-}
-
-// Update live performance metrics display
-function updateLiveMetrics(metrics) {
-    document.getElementById('currentEquity').textContent = formatCurrency(metrics.equity);
-    document.getElementById('currentEquity').className = 'metric-value positive';
-    
-    document.getElementById('todayPL').textContent = formatCurrency(metrics.dailyPL);
-    document.getElementById('todayPL').className = 'metric-value ' + 
-        (metrics.dailyPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('bestTradeToday').textContent = formatCurrency(metrics.bestTrade);
-    document.getElementById('worstTradeToday').textContent = formatCurrency(metrics.worstTrade);
-    document.getElementById('avgDurationLive').textContent = formatDuration(metrics.avgDuration);
-    document.getElementById('tradesToday').textContent = metrics.totalTrades;
-    
-    document.getElementById('liveProfitFactor').textContent = 
-        metrics.profitFactor === 999 ? '∞' : metrics.profitFactor.toFixed(2);
-    const pfElement = document.getElementById('liveProfitFactor');
-    pfElement.className = 'metric-value';
-    if (metrics.profitFactor >= 2.0) {
-        pfElement.classList.add('positive');
-    } else if (metrics.profitFactor < 1.0) {
-        pfElement.classList.add('negative');
-    }
-    
-    document.getElementById('liveWinRate').textContent = formatPercent(metrics.winRate);
-    const wrElement = document.getElementById('liveWinRate');
-    wrElement.className = 'metric-value';
-    if (metrics.winRate >= 60) {
-        wrElement.classList.add('positive');
-    } else if (metrics.winRate < 40) {
-        wrElement.classList.add('negative');
-    }
-}
-
-// Update live statistics
-async function updateLiveStats() {
-    const stats = await fetchData('getLiveStats');
-    
-    if (!stats) {
-        updateConnectionStatus(false);
-        return;
-    }
-    
-    updateConnectionStatus(true);
-    
-    // Store starting balance if not set
-    if (startingBalance === 0) {
-        startingBalance = parseFloat(stats.Balance) || 0;
-    }
-    
-    // Update all stat cards
-    document.getElementById('balance').textContent = formatCurrency(stats.Balance);
-    document.getElementById('equity').textContent = formatCurrency(stats.Equity);
-    
-    const floatingPL = parseFloat(stats['Floating P/L']) || 0;
-    const floatingEl = document.getElementById('floatingPL');
-    floatingEl.textContent = formatCurrency(floatingPL);
-    floatingEl.className = 'stat-value ' + (floatingPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('dailyTrades').textContent = stats['Daily Trades'] || '0';
-    document.getElementById('wins').textContent = stats['Daily Wins'] || '0';
-    document.getElementById('losses').textContent = stats['Daily Losses'] || '0';
-    document.getElementById('winRate').textContent = formatPercent(stats['Win Rate']);
-    
-    const dailyPL = parseFloat(stats['Daily P/L']) || 0;
-    const dailyPLEl = document.getElementById('dailyPL');
-    dailyPLEl.textContent = formatCurrency(dailyPL);
-    dailyPLEl.className = 'stat-value ' + (dailyPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('consecLosses').textContent = stats['Consecutive Losses'] || '0';
-    document.getElementById('openPositions').textContent = stats['Open Positions'] || '0';
-    
-    // Update EA status
-    const statusEl = document.getElementById('eaStatus');
-    const status = stats.Status || 'UNKNOWN';
-    statusEl.textContent = status;
-    statusEl.className = 'stat-value';
-    
-    if (status === 'MONITORING' || status === 'IN_POSITION') {
-        statusEl.classList.add('positive');
-    } else if (status === 'LOCKOUT' || status === 'LIMIT_REACHED') {
-        statusEl.classList.add('negative');
-    }
-    
-    // Update last trade
-    const lastTradeDirection = stats['Last Trade Direction'] || 'NONE';
-    const lastTradeProfit = parseFloat(stats['Last Trade Profit']) || 0;
-    const lastTradeEl = document.getElementById('lastTrade');
-    
-    if (lastTradeDirection !== 'NONE') {
-        lastTradeEl.textContent = `${lastTradeDirection} (${formatCurrency(lastTradeProfit)})`;
-        lastTradeEl.className = 'stat-value ' + (lastTradeProfit >= 0 ? 'positive' : 'negative');
-    } else {
-        lastTradeEl.textContent = 'NONE';
-        lastTradeEl.className = 'stat-value';
-    }
-    
-    // Add current equity to history
-    const currentEquity = parseFloat(stats.Equity) || 0;
-    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
-    equityHistory.push({ time: timestamp, equity: currentEquity });
-    
-    // Keep only last 50 data points
-    if (equityHistory.length > 50) {
-        equityHistory.shift();
-    }
-    
-    // Update last update time
-    const now = new Date();
-    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
-    
-    lastUpdateTime = now;
-    
-    return stats;
-}
-
-// Get today's trades only
-async function getTodaysTrades() {
-    const allTrades = await fetchData('getTradeHistory&limit=100');
-    if (!allTrades || allTrades.length === 0) return [];
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    return allTrades.filter(trade => {
-        const tradeDate = new Date(trade['Close Time']);
-        tradeDate.setHours(0, 0, 0, 0);
-        return tradeDate.getTime() === today.getTime();
-    });
-}
-
-// Update trade history
-async function updateTradeHistory() {
-    const todaysTrades = await getTodaysTrades();
-    
-    if (!todaysTrades || todaysTrades.length === 0) {
-        document.getElementById('tradesTableBody').innerHTML = 
-            '<tr><td colspan="9" class="no-data">No trades today</td></tr>';
-        return todaysTrades;
-    }
-    
-    let html = '';
-    todaysTrades.forEach((trade, index) => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
-        const profitSymbol = profit >= 0 ? '+' : '';
-        
-        html += `<tr>
-            <td>${index + 1}</td>
-            <td><span class="type-${trade.Type}">${trade.Type}</span></td>
-            <td>${formatDate(trade['Open Time'])}</td>
-            <td>${formatDate(trade['Close Time'])}</td>
-            <td>${parseFloat(trade['Open Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade['Close Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade.Lots).toFixed(2)}</td>
-            <td class="${profitClass}">${profitSymbol}${formatCurrency(profit)}</td>
-            <td>${formatDuration(trade.Duration)}</td>
-        </tr>`;
-    });
-    
-    document.getElementById('tradesTableBody').innerHTML = html;
-    
-    return todaysTrades;
-}
-
-// Update Real-Time Equity Curve
-function updateEquityCurveChart() {
-    const ctx = document.getElementById('equityCurveChart');
-    if (!ctx) return;
-    
-    if (equityCurveChart) {
-        equityCurveChart.destroy();
-    }
-    
-    if (equityHistory.length === 0) return;
-    
-    const labels = equityHistory.map(item => item.time);
-    const data = equityHistory.map(item => item.equity);
-    
-    equityCurveChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Live Equity ($)',
-                data: data,
-                borderColor: CONFIG.COLORS.primary,
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointHoverRadius: 6,
-                pointBackgroundColor: CONFIG.COLORS.primary
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             interaction: {
-                intersect: false,
-                mode: 'index'
+                mode: 'index',
+                intersect: false
             },
             plugins: {
                 legend: {
                     display: true,
+                    position: 'top',
                     labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
+                        color: '#e6edf3',
+                        font: {
+                            size: 14,
+                            weight: '600'
+                        },
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
+                    enabled: true,
+                    backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                    titleColor: '#1a73e8',
+                    bodyColor: '#e6edf3',
+                    borderColor: '#30363d',
                     borderWidth: 1,
-                    padding: 12,
+                    padding: 16,
+                    displayColors: true,
                     callbacks: {
+                        title: function(context) {
+                            const date = new Date(context[0].parsed.x);
+                            return date.toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            });
+                        },
                         label: function(context) {
-                            return 'Equity: ' + formatCurrency(context.parsed.y);
+                            return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
                         }
                     }
                 }
             },
             scales: {
-                y: {
-                    beginAtZero: false,
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'second',
+                        displayFormats: {
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour: 'HH:mm'
+                        }
+                    },
                     ticks: {
-                        color: '#8892a6',
+                        color: '#8b949e',
+                        font: {
+                            size: 11
+                        },
+                        maxRotation: 0
+                    },
+                    grid: {
+                        color: 'rgba(48, 54, 61, 0.5)',
+                        drawBorder: false
+                    }
+                },
+                y: {
+                    position: 'right',
+                    ticks: {
+                        color: '#8b949e',
+                        font: {
+                            size: 11
+                        },
                         callback: function(value) {
-                            return formatCurrency(value);
+                            return '$' + value.toFixed(2);
                         }
                     },
                     grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6',
-                        maxRotation: 45,
-                        minRotation: 45,
-                        maxTicksLimit: 10
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
+                        color: 'rgba(48, 54, 61, 0.5)',
+                        drawBorder: false
                     }
                 }
+            },
+            animation: {
+                duration: 750,
+                easing: 'easeInOutQuart'
             }
         }
     });
 }
 
-// Update P/L Distribution Chart
-function updatePLDistributionChart(trades) {
-    const ctx = document.getElementById('plDistributionChart');
-    if (!ctx) return;
+function updateEquityChart(balance, equity) {
+    if (!equityChart || chartPaused) return;
     
-    if (plDistributionChart) {
-        plDistributionChart.destroy();
+    const now = Date.now();
+    
+    // Add data point
+    equityChart.data.datasets[0].data.push({
+        x: now,
+        y: parseFloat(balance) || 0
+    });
+    
+    equityChart.data.datasets[1].data.push({
+        x: now,
+        y: parseFloat(equity) || 0
+    });
+    
+    // Keep only last 100 points for performance
+    if (equityChart.data.datasets[0].data.length > 100) {
+        equityChart.data.datasets[0].data.shift();
+        equityChart.data.datasets[1].data.shift();
     }
     
-    if (!trades || trades.length === 0) return;
+    // Update chart
+    equityChart.update('none'); // Use 'none' mode for smooth updates
+}
+
+function toggleChartPause() {
+    chartPaused = !chartPaused;
+    const btn = document.getElementById('pauseBtn');
+    const icon = btn.querySelector('.material-icons');
     
-    const recent20 = trades.slice(0, 20).reverse();
-    const labels = recent20.map((_, idx) => `T${idx + 1}`);
-    const profits = recent20.map(trade => parseFloat(trade.Profit) || 0);
-    const colors = profits.map(p => p >= 0 ? CONFIG.COLORS.success : CONFIG.COLORS.danger);
+    if (chartPaused) {
+        icon.textContent = 'play_arrow';
+        btn.style.color = '#34a853';
+    } else {
+        icon.textContent = 'pause';
+        btn.style.color = '#8b949e';
+    }
+}
+
+function resetChart() {
+    if (!equityChart) return;
     
-    plDistributionChart = new Chart(ctx, {
+    equityChart.data.datasets[0].data = [];
+    equityChart.data.datasets[1].data = [];
+    equityChart.update();
+    
+    // Show reset animation
+    const btn = event.target.closest('.btn-icon');
+    btn.style.transform = 'rotate(360deg)';
+    setTimeout(() => {
+        btn.style.transform = 'rotate(0deg)';
+    }, 300);
+}
+
+/* ==========================================
+   TRADES BAR CHART
+   ========================================== */
+
+function createTradesChart() {
+    const ctx = document.getElementById('tradesChart');
+    if (!ctx) return;
+    
+    tradesChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: [],
             datasets: [{
-                label: 'P/L ($)',
-                data: profits,
-                backgroundColor: colors,
-                borderColor: colors,
+                label: 'Profit/Loss ($)',
+                data: [],
+                backgroundColor: [],
+                borderColor: [],
                 borderWidth: 2,
-                borderRadius: 8
+                borderRadius: 8,
+                borderSkipped: false
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
+                    backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                    titleColor: '#1a73e8',
+                    bodyColor: '#e6edf3',
+                    borderColor: '#30363d',
                     borderWidth: 1,
                     padding: 12,
                     callbacks: {
                         label: function(context) {
-                            return 'P/L: ' + formatCurrency(context.parsed.y);
+                            const value = context.parsed.y;
+                            return 'P/L: $' + value.toFixed(2);
                         }
                     }
                 }
@@ -1322,440 +298,165 @@ function updatePLDistributionChart(trades) {
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        color: '#8892a6',
+                        color: '#8b949e',
                         callback: function(value) {
-                            return formatCurrency(value);
+                            return '$' + value.toFixed(0);
                         }
                     },
                     grid: {
-                        color: 'rgba(255,255,255,0.05)'
+                        color: 'rgba(48, 54, 61, 0.5)',
+                        drawBorder: false
                     }
                 },
                 x: {
                     ticks: {
-                        color: '#8892a6'
+                        color: '#8b949e'
                     },
                     grid: {
-                        color: 'rgba(255,255,255,0.05)'
+                        display: false
                     }
                 }
+            },
+            animation: {
+                duration: 500,
+                easing: 'easeInOutQuart'
             }
         }
     });
 }
 
-// Update Win/Loss Chart
-function updateWinLossChart(trades) {
-    const ctx = document.getElementById('winLossChart');
-    if (!ctx) return;
+function updateTradesChart(trades) {
+    if (!tradesChart || !trades || trades.length === 0) return;
     
-    if (winLossChart) {
-        winLossChart.destroy();
-    }
+    const recentTrades = trades.slice(0, 20).reverse();
     
-    if (!trades || trades.length === 0) return;
-    
-    let wins = 0, losses = 0;
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        if (profit > 0) wins++;
-        else if (profit < 0) losses++;
+    const labels = recentTrades.map((_, idx) => 'T' + (idx + 1));
+    const data = recentTrades.map(trade => parseFloat(trade.Profit) || 0);
+    const colors = data.map(profit => {
+        if (profit > 0) {
+            return {
+                bg: 'rgba(52, 168, 83, 0.8)',
+                border: '#34a853'
+            };
+        } else {
+            return {
+                bg: 'rgba(234, 67, 53, 0.8)',
+                border: '#ea4335'
+            };
+        }
     });
     
-    winLossChart = new Chart(ctx, {
+    tradesChart.data.labels = labels;
+    tradesChart.data.datasets[0].data = data;
+    tradesChart.data.datasets[0].backgroundColor = colors.map(c => c.bg);
+    tradesChart.data.datasets[0].borderColor = colors.map(c => c.border);
+    
+    tradesChart.update();
+}
+
+/* ==========================================
+   PIE CHART
+   ========================================== */
+
+function createPieChart() {
+    const ctx = document.getElementById('pieChart');
+    if (!ctx) return;
+    
+    pieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: [`Wins (${wins})`, `Losses (${losses})`],
+            labels: ['Wins', 'Losses'],
             datasets: [{
-                data: [wins, losses],
+                data: [0, 0],
                 backgroundColor: [
-                    'rgba(74, 222, 128, 0.8)',
-                    'rgba(248, 113, 113, 0.8)'
+                    'rgba(52, 168, 83, 0.8)',
+                    'rgba(234, 67, 53, 0.8)'
                 ],
                 borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
+                    '#34a853',
+                    '#ea4335'
                 ],
                 borderWidth: 3
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' },
-                        padding: 20
+                        color: '#e6edf3',
+                        font: {
+                            size: 14,
+                            weight: '600'
+                        },
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
                     }
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
+                    backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                    titleColor: '#1a73e8',
+                    bodyColor: '#e6edf3',
+                    borderColor: '#30363d',
                     borderWidth: 1,
                     padding: 12
                 }
-            }
-        }
-    });
-}
-
-// Update Streak Chart
-function updateStreakChart(trades) {
-    const ctx = document.getElementById('streakChart');
-    if (!ctx) return;
-    
-    if (streakChart) {
-        streakChart.destroy();
-    }
-    
-    if (!trades || trades.length === 0) return;
-    
-    let currentStreak = 0;
-    let maxWinStreak = 0;
-    let maxLossStreak = 0;
-    let lastWasWin = null;
-    
-    trades.slice().reverse().forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const isWin = profit > 0;
-        
-        if (lastWasWin === null || lastWasWin === isWin) {
-            currentStreak++;
-        } else {
-            if (lastWasWin) {
-                maxWinStreak = Math.max(maxWinStreak, currentStreak);
-            } else {
-                maxLossStreak = Math.max(maxLossStreak, currentStreak);
-            }
-            currentStreak = 1;
-        }
-        lastWasWin = isWin;
-    });
-    
-    if (lastWasWin) {
-        maxWinStreak = Math.max(maxWinStreak, currentStreak);
-    } else if (lastWasWin === false) {
-        maxLossStreak = Math.max(maxLossStreak, currentStreak);
-    }
-    
-    streakChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Max Win Streak', 'Max Loss Streak'],
-            datasets: [{
-                label: 'Streak Length',
-                data: [maxWinStreak, maxLossStreak],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.6)',
-                    'rgba(248, 113, 113, 0.6)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Streak: ' + context.parsed.y + ' trades';
-                        }
-                    }
-                }
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        stepSize: 1
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
+            cutout: '70%',
+            animation: {
+                animateRotate: true,
+                animateScale: true,
+                duration: 800
             }
         }
     });
 }
 
-// Update all charts
-function updateAllCharts(trades) {
-    updateEquityCurveChart();
-    if (trades && trades.length > 0) {
-        updatePLDistributionChart(trades);
-        updateWinLossChart(trades);
-        updateStreakChart(trades);
-    }
-}
-
-// Update all data
-async function updateAll() {
-    debug('Updating all data...');
-    const stats = await updateLiveStats();
-    if (stats) {
-        const todaysTrades = await updateTradeHistory();
-        const metrics = calculateLiveMetrics(stats, todaysTrades);
-        updateLiveMetrics(metrics);
-        updateAllCharts(todaysTrades);
-    }
-    debug('All data updated');
-}
-
-// Initialize dashboard
-function initDashboard() {
-    debug('Initializing dashboard...');
+function updatePieChart(wins, losses) {
+    if (!pieChart) return;
     
-    // Set Chart.js defaults
-    Chart.defaults.color = '#b0b7c3';
-    Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
-    Chart.defaults.font.family = "'Inter', sans-serif";
+    const winsCount = parseInt(wins) || 0;
+    const lossesCount = parseInt(losses) || 0;
     
-    // Initial update
-    updateAll();
-    
-    // Set up auto-update
-    if (updateInterval) {
-        clearInterval(updateInterval);
-    }
-    
-    updateInterval = setInterval(() => {
-        updateAll();
-    }, CONFIG.UPDATE_INTERVAL);
-    
-    debug(`Auto-update enabled (${CONFIG.UPDATE_INTERVAL}ms interval)`);
+    pieChart.data.datasets[0].data = [winsCount, lossesCount];
+    pieChart.data.labels = [`Wins (${winsCount})`, `Losses (${lossesCount})`];
+    pieChart.update();
 }
 
-// Start dashboard when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Gold HyperFlow Scalper Dashboard - Initializing...');
-    console.log('Google Script URL:', CONFIG.GOOGLE_SCRIPT_URL);
-    
-    initDashboard();
-    
-    // Handle visibility change to pause/resume updates
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            debug('Page hidden - pausing updates');
-            if (updateInterval) {
-                clearInterval(updateInterval);
-            }
-        } else {
-            debug('Page visible - resuming updates');
-            equityHistory = []; // Reset equity history
-            initDashboard();
-        }
-    });
-});
+/* ==========================================
+   DATA FETCHING
+   ========================================== */
 
-// Handle errors globally
-window.addEventListener('error', function(event) {
-    console.error('Dashboard error:', event.error);
-});
-
-window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
-});
-
-// Debug logger
-function debug(message, data = null) {
-    if (CONFIG.DEBUG_MODE) {
-        console.log(`[GHFS Dashboard] ${message}`, data || '');
-    }
-}
-
-// Format currency
-function formatCurrency(value) {
-    const num = parseFloat(value) || 0;
-    return '$' + num.toFixed(2);
-}
-
-// Format percentage
-function formatPercent(value) {
-    const num = parseFloat(value) || 0;
-    return num.toFixed(1) + '%';
-}
-
-// Format date
-function formatDate(dateString) {
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-    } catch (e) {
-        return dateString;
-    }
-}
-
-// Format duration
-function formatDuration(seconds) {
-    const sec = parseInt(seconds) || 0;
-    const minutes = Math.floor(sec / 60);
-    const remainingSeconds = sec % 60;
-    return `${minutes}m ${remainingSeconds}s`;
-}
-
-// Update connection status
-function updateConnectionStatus(connected) {
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('connectionStatus');
-    
-    if (connected) {
-        statusDot.classList.remove('disconnected');
-        statusText.textContent = 'Connected';
-    } else {
-        statusDot.classList.add('disconnected');
-        statusText.textContent = 'Disconnected';
-    }
-}
-
-// Fetch data from Google Apps Script
 async function fetchData(action) {
     try {
         const url = `${CONFIG.GOOGLE_SCRIPT_URL}?action=${action}`;
-        debug(`Fetching ${action}...`);
-        
         const response = await fetch(url);
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP ${response.status}`);
         }
         
         const data = await response.json();
-        debug(`${action} response:`, data);
         
         if (data.status === 'success') {
             return data.data;
         } else {
-            throw new Error(data.message || 'Unknown error');
+            console.error(`API Error (${action}):`, data.message);
+            return null;
         }
     } catch (error) {
-        console.error(`Error fetching ${action}:`, error);
+        console.error(`Fetch Error (${action}):`, error.message);
         return null;
     }
 }
 
-// Calculate performance metrics
-function calculatePerformanceMetrics(trades) {
-    if (!trades || trades.length === 0) {
-        return {
-            totalNetPL: 0,
-            bestTrade: 0,
-            worstTrade: 0,
-            avgWin: 0,
-            avgLoss: 0,
-            profitFactor: 0,
-            avgDuration: 0,
-            totalTrades: 0,
-            wins: 0,
-            losses: 0
-        };
-    }
-    
-    let totalProfit = 0;
-    let totalLoss = 0;
-    let wins = 0;
-    let losses = 0;
-    let bestTrade = 0;
-    let worstTrade = 0;
-    let totalDuration = 0;
-    
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const duration = parseInt(trade.Duration) || 0;
-        
-        totalDuration += duration;
-        
-        if (profit > 0) {
-            wins++;
-            totalProfit += profit;
-            if (profit > bestTrade) bestTrade = profit;
-        } else if (profit < 0) {
-            losses++;
-            totalLoss += Math.abs(profit);
-            if (profit < worstTrade) worstTrade = profit;
-        }
-    });
-    
-    const avgWin = wins > 0 ? totalProfit / wins : 0;
-    const avgLoss = losses > 0 ? totalLoss / losses : 0;
-    const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : 0;
-    const avgDuration = trades.length > 0 ? totalDuration / trades.length : 0;
-    
-    return {
-        totalNetPL: totalProfit - totalLoss,
-        bestTrade,
-        worstTrade,
-        avgWin,
-        avgLoss,
-        profitFactor,
-        avgDuration,
-        totalTrades: trades.length,
-        wins,
-        losses
-    };
-}
+/* ==========================================
+   DATA UPDATES
+   ========================================== */
 
-// Update performance metrics display
-function updatePerformanceMetrics(metrics) {
-    document.getElementById('totalNetPL').textContent = formatCurrency(metrics.totalNetPL);
-    document.getElementById('totalNetPL').className = 'metric-value ' + 
-        (metrics.totalNetPL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('bestTrade').textContent = formatCurrency(metrics.bestTrade);
-    document.getElementById('worstTrade').textContent = formatCurrency(metrics.worstTrade);
-    document.getElementById('avgWin').textContent = formatCurrency(metrics.avgWin);
-    document.getElementById('avgLoss').textContent = formatCurrency(metrics.avgLoss);
-    document.getElementById('profitFactor').textContent = metrics.profitFactor.toFixed(2);
-    document.getElementById('avgDuration').textContent = formatDuration(metrics.avgDuration);
-    document.getElementById('totalTrades').textContent = metrics.totalTrades;
-    
-    // Color profit factor based on value
-    const pfElement = document.getElementById('profitFactor');
-    pfElement.className = 'metric-value';
-    if (metrics.profitFactor >= 2.0) {
-        pfElement.classList.add('positive');
-    } else if (metrics.profitFactor < 1.0) {
-        pfElement.classList.add('negative');
-    }
-}
-
-// Update live statistics
 async function updateLiveStats() {
     const stats = await fetchData('getLiveStats');
     
@@ -1766,54 +467,150 @@ async function updateLiveStats() {
     
     updateConnectionStatus(true);
     
-    // Update all stat cards
+    // Update quick stats
     document.getElementById('balance').textContent = formatCurrency(stats.Balance);
     document.getElementById('equity').textContent = formatCurrency(stats.Equity);
     
     const floatingPL = parseFloat(stats['Floating P/L']) || 0;
-    const floatingEl = document.getElementById('floatingPL');
-    floatingEl.textContent = formatCurrency(floatingPL);
-    floatingEl.className = 'stat-value ' + (floatingPL >= 0 ? 'positive' : 'negative');
+    updateValueWithColor('floatingPL', floatingPL, true);
     
+    const dailyPL = parseFloat(stats['Daily P/L']) || 0;
+    updateValueWithColor('dailyPL', dailyPL, true);
+    
+    // Update performance cards
     document.getElementById('dailyTrades').textContent = stats['Daily Trades'] || '0';
     document.getElementById('wins').textContent = stats['Daily Wins'] || '0';
     document.getElementById('losses').textContent = stats['Daily Losses'] || '0';
     document.getElementById('winRate').textContent = formatPercent(stats['Win Rate']);
-    
-    const dailyPL = parseFloat(stats['Daily P/L']) || 0;
-    const dailyPLEl = document.getElementById('dailyPL');
-    dailyPLEl.textContent = formatCurrency(dailyPL);
-    dailyPLEl.className = 'stat-value ' + (dailyPL >= 0 ? 'positive' : 'negative');
-    
     document.getElementById('consecLosses').textContent = stats['Consecutive Losses'] || '0';
     document.getElementById('openPositions').textContent = stats['Open Positions'] || '0';
     
     // Update EA status
-    const statusEl = document.getElementById('eaStatus');
-    const status = stats.Status || 'UNKNOWN';
-    statusEl.textContent = status;
-    statusEl.className = 'stat-value';
-    
-    if (status === 'MONITORING' || status === 'IN_POSITION') {
-        statusEl.classList.add('positive');
-    } else if (status === 'LOCKOUT' || status === 'LIMIT_REACHED') {
-        statusEl.classList.add('negative');
-    }
+    updateEAStatus(stats.Status);
     
     // Update last trade
-    const lastTradeDirection = stats['Last Trade Direction'] || 'NONE';
-    const lastTradeProfit = parseFloat(stats['Last Trade Profit']) || 0;
-    const lastTradeEl = document.getElementById('lastTrade');
+    updateLastTrade(stats['Last Trade Direction'], stats['Last Trade Profit']);
     
-    if (lastTradeDirection !== 'NONE') {
-        lastTradeEl.textContent = `${lastTradeDirection} (${formatCurrency(lastTradeProfit)})`;
-        lastTradeEl.className = 'stat-value ' + (lastTradeProfit >= 0 ? 'positive' : 'negative');
-    } else {
-        lastTradeEl.textContent = 'NONE';
-        lastTradeEl.className = 'stat-value';
-    }
+    // Update equity chart
+    updateEquityChart(stats.Balance, stats.Equity);
+    
+    // Update pie chart
+    updatePieChart(stats['Daily Wins'], stats['Daily Losses']);
     
     // Update last update time
+    updateLastUpdateTime();
+}
+
+async function updateTradeHistory() {
+    const trades = await fetchData('getTradeHistory&limit=50');
+    
+    if (!trades || trades.length === 0) {
+        document.getElementById('tradesTableBody').innerHTML = `
+            <tr>
+                <td colspan="9" class="no-data">
+                    <span class="material-icons">info</span>
+                    <span>No trades recorded yet</span>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Update trades chart
+    updateTradesChart(trades);
+    
+    // Update table
+    let html = '';
+    trades.forEach((trade, index) => {
+        const profit = parseFloat(trade.Profit) || 0;
+        const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
+        const profitSymbol = profit >= 0 ? '+' : '';
+        
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td><span class="type-${trade.Type}">${trade.Type}</span></td>
+                <td>${formatDateTime(trade['Open Time'])}</td>
+                <td>${formatDateTime(trade['Close Time'])}</td>
+                <td>${parseFloat(trade['Open Price']).toFixed(5)}</td>
+                <td>${parseFloat(trade['Close Price']).toFixed(5)}</td>
+                <td>${parseFloat(trade.Lots).toFixed(2)}</td>
+                <td class="${profitClass}">${profitSymbol}${formatCurrency(profit)}</td>
+                <td>${formatDuration(trade.Duration)}</td>
+            </tr>
+        `;
+    });
+    
+    document.getElementById('tradesTableBody').innerHTML = html;
+}
+
+async function updateAllData() {
+    await Promise.all([
+        updateLiveStats(),
+        updateTradeHistory()
+    ]);
+}
+
+/* ==========================================
+   UI HELPERS
+   ========================================== */
+
+function updateConnectionStatus(connected) {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    
+    if (connected) {
+        dot.classList.remove('disconnected');
+        text.textContent = 'Connected';
+    } else {
+        dot.classList.add('disconnected');
+        text.textContent = 'Disconnected';
+    }
+}
+
+function updateValueWithColor(elementId, value, isCurrency = false) {
+    const element = document.getElementById(elementId);
+    const formatted = isCurrency ? formatCurrency(value) : value.toString();
+    
+    element.textContent = formatted;
+    element.classList.remove('positive', 'negative');
+    
+    if (value > 0) {
+        element.classList.add('positive');
+    } else if (value < 0) {
+        element.classList.add('negative');
+    }
+}
+
+function updateEAStatus(status) {
+    const element = document.getElementById('eaStatus');
+    element.textContent = status || 'UNKNOWN';
+    
+    // Add appropriate styling based on status
+    element.className = 'perf-status';
+    if (status === 'MONITORING' || status === 'IN_POSITION') {
+        element.style.color = '#34a853';
+    } else if (status === 'LOCKOUT' || status === 'LIMIT_REACHED') {
+        element.style.color = '#ea4335';
+    } else {
+        element.style.color = '#8b949e';
+    }
+}
+
+function updateLastTrade(direction, profit) {
+    const element = document.getElementById('lastTrade');
+    const profitValue = parseFloat(profit) || 0;
+    
+    if (direction && direction !== 'NONE') {
+        element.textContent = `${direction} (${formatCurrency(profitValue)})`;
+        element.style.color = profitValue >= 0 ? '#34a853' : '#ea4335';
+    } else {
+        element.textContent = 'NONE';
+        element.style.color = '#8b949e';
+    }
+}
+
+function updateLastUpdateTime() {
     const now = new Date();
     document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('en-US', {
         hour: '2-digit',
@@ -1821,719 +618,92 @@ async function updateLiveStats() {
         second: '2-digit',
         hour12: false
     });
-    
-    lastUpdateTime = now;
 }
 
-// Update trade history
-async function updateTradeHistory() {
-    const trades = await fetchData(`getTradeHistory&limit=${CONFIG.MAX_TRADES_DISPLAY}`);
-    
-    if (!trades || trades.length === 0) {
-        document.getElementById('tradesTableBody').innerHTML = 
-            '<tr><td colspan="9" class="no-data">No trades recorded yet</td></tr>';
-        return;
-    }
-    
-    allTradesData = trades;
-    
-    let html = '';
-    trades.forEach((trade, index) => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const profitClass = profit >= 0 ? 'profit-positive' : 'profit-negative';
-        const profitSymbol = profit >= 0 ? '+' : '';
-        
-        html += `<tr>
-            <td>${index + 1}</td>
-            <td><span class="type-${trade.Type}">${trade.Type}</span></td>
-            <td>${formatDate(trade['Open Time'])}</td>
-            <td>${formatDate(trade['Close Time'])}</td>
-            <td>${parseFloat(trade['Open Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade['Close Price']).toFixed(5)}</td>
-            <td>${parseFloat(trade.Lots).toFixed(2)}</td>
-            <td class="${profitClass}">${profitSymbol}${formatCurrency(profit)}</td>
-            <td>${formatDuration(trade.Duration)}</td>
-        </tr>`;
-    });
-    
-    document.getElementById('tradesTableBody').innerHTML = html;
-    
-    // Calculate and update performance metrics
-    const metrics = calculatePerformanceMetrics(trades);
-    updatePerformanceMetrics(metrics);
-    
-    // Update all charts with trade data
-    updateAllCharts(trades);
+/* ==========================================
+   FORMATTING HELPERS
+   ========================================== */
+
+function formatCurrency(value) {
+    const num = parseFloat(value) || 0;
+    return '$' + num.toFixed(2);
 }
 
-// Update Equity Curve Chart
-function updateEquityCurveChart(trades) {
-    const ctx = document.getElementById('equityCurveChart');
-    if (!ctx) return;
-    
-    if (equityCurveChart) {
-        equityCurveChart.destroy();
-    }
-    
-    // Calculate cumulative P/L
-    let cumulative = 0;
-    const labels = ['Start'];
-    const data = [0];
-    
-    trades.slice().reverse().forEach((trade, idx) => {
-        cumulative += parseFloat(trade.Profit) || 0;
-        labels.push(`T${idx + 1}`);
-        data.push(cumulative);
-    });
-    
-    equityCurveChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Cumulative P/L ($)',
-                data: data,
-                borderColor: CONFIG.COLORS.primary,
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 2,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Cumulative P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6',
-                        maxRotation: 45,
-                        minRotation: 0
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
+function formatPercent(value) {
+    const num = parseFloat(value) || 0;
+    return num.toFixed(1) + '%';
 }
 
-// Update P/L Distribution Chart
-function updatePLDistributionChart(trades) {
-    const ctx = document.getElementById('plDistributionChart');
-    if (!ctx) return;
-    
-    if (plDistributionChart) {
-        plDistributionChart.destroy();
+function formatDateTime(dateString) {
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleString('en-US', {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    } catch {
+        return dateString;
     }
-    
-    const recent20 = trades.slice(0, 20).reverse();
-    const labels = recent20.map((_, idx) => `T${idx + 1}`);
-    const profits = recent20.map(trade => parseFloat(trade.Profit) || 0);
-    const colors = profits.map(p => p >= 0 ? CONFIG.COLORS.success : CONFIG.COLORS.danger);
-    
-    plDistributionChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'P/L ($)',
-                data: profits,
-                backgroundColor: colors,
-                borderColor: colors,
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
 }
 
-// Update Win/Loss Chart
-function updateWinLossChart(trades) {
-    const ctx = document.getElementById('winLossChart');
-    if (!ctx) return;
-    
-    if (winLossChart) {
-        winLossChart.destroy();
-    }
-    
-    let wins = 0, losses = 0;
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        if (profit > 0) wins++;
-        else if (profit < 0) losses++;
-    });
-    
-    winLossChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: [`Wins (${wins})`, `Losses (${losses})`],
-            datasets: [{
-                data: [wins, losses],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.8)',
-                    'rgba(248, 113, 113, 0.8)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 3
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' },
-                        padding: 20
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12
-                }
-            }
-        }
-    });
+function formatDuration(seconds) {
+    const sec = parseInt(seconds) || 0;
+    const minutes = Math.floor(sec / 60);
+    const remainingSeconds = sec % 60;
+    return `${minutes}m ${remainingSeconds}s`;
 }
 
-// Update Duration Analysis Chart
-function updateDurationChart(trades) {
-    const ctx = document.getElementById('durationChart');
-    if (!ctx) return;
-    
-    if (durationChart) {
-        durationChart.destroy();
-    }
-    
-    const recent15 = trades.slice(0, 15).reverse();
-    const labels = recent15.map((_, idx) => `T${idx + 1}`);
-    const durations = recent15.map(trade => (parseInt(trade.Duration) || 0) / 60); // Convert to minutes
-    
-    durationChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Duration (minutes)',
-                data: durations,
-                borderColor: CONFIG.COLORS.warning,
-                backgroundColor: 'rgba(251, 191, 36, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 4,
-                pointHoverRadius: 7
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Duration: ' + context.parsed.y.toFixed(1) + ' min';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return value.toFixed(1) + 'm';
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
+/* ==========================================
+   AUTO-UPDATE SYSTEM
+   ========================================== */
 
-// Update Trade Type Performance Chart
-function updateTradeTypeChart(trades) {
-    const ctx = document.getElementById('tradeTypeChart');
-    if (!ctx) return;
-    
-    if (tradeTypeChart) {
-        tradeTypeChart.destroy();
+function startAutoUpdate() {
+    // Clear any existing interval
+    if (statsUpdateInterval) {
+        clearInterval(statsUpdateInterval);
     }
     
-    let buyProfit = 0, sellProfit = 0;
-    let buyCount = 0, sellCount = 0;
-    
-    trades.forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        if (trade.Type === 'BUY') {
-            buyProfit += profit;
-            buyCount++;
-        } else if (trade.Type === 'SELL') {
-            sellProfit += profit;
-            sellCount++;
-        }
-    });
-    
-    tradeTypeChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: [`BUY (${buyCount})`, `SELL (${sellCount})`],
-            datasets: [{
-                label: 'Total P/L ($)',
-                data: [buyProfit, sellProfit],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.6)',
-                    'rgba(248, 113, 113, 0.6)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'P/L: ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update Streak Chart
-function updateStreakChart(trades) {
-    const ctx = document.getElementById('streakChart');
-    if (!ctx) return;
-    
-    if (streakChart) {
-        streakChart.destroy();
-    }
-    
-    let currentStreak = 0;
-    let maxWinStreak = 0;
-    let maxLossStreak = 0;
-    let lastWasWin = null;
-    
-    trades.slice().reverse().forEach(trade => {
-        const profit = parseFloat(trade.Profit) || 0;
-        const isWin = profit > 0;
-        
-        if (lastWasWin === null || lastWasWin === isWin) {
-            currentStreak++;
-        } else {
-            if (lastWasWin) {
-                maxWinStreak = Math.max(maxWinStreak, currentStreak);
-            } else {
-                maxLossStreak = Math.max(maxLossStreak, currentStreak);
-            }
-            currentStreak = 1;
-        }
-        lastWasWin = isWin;
-    });
-    
-    if (lastWasWin) {
-        maxWinStreak = Math.max(maxWinStreak, currentStreak);
-    } else if (lastWasWin === false) {
-        maxLossStreak = Math.max(maxLossStreak, currentStreak);
-    }
-    
-    streakChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Max Win Streak', 'Max Loss Streak'],
-            datasets: [{
-                label: 'Streak Length',
-                data: [maxWinStreak, maxLossStreak],
-                backgroundColor: [
-                    'rgba(74, 222, 128, 0.6)',
-                    'rgba(248, 113, 113, 0.6)'
-                ],
-                borderColor: [
-                    CONFIG.COLORS.success,
-                    CONFIG.COLORS.danger
-                ],
-                borderWidth: 2,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Streak: ' + context.parsed.y + ' trades';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        stepSize: 1
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update P/L Trend Chart
-function updatePLTrendChart(trades) {
-    const ctx = document.getElementById('plTrendChart');
-    if (!ctx) return;
-    
-    if (plTrendChart) {
-        plTrendChart.destroy();
-    }
-    
-    const recent20 = trades.slice(0, 20).reverse();
-    const labels = recent20.map((_, idx) => `T${idx + 1}`);
-    const profits = recent20.map(trade => parseFloat(trade.Profit) || 0);
-    
-    // Calculate moving average (5-trade MA)
-    const movingAvg = [];
-    for (let i = 0; i < profits.length; i++) {
-        const start = Math.max(0, i - 4);
-        const slice = profits.slice(start, i + 1);
-        const avg = slice.reduce((a, b) => a + b, 0) / slice.length;
-        movingAvg.push(avg);
-    }
-    
-    plTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Trade P/L',
-                    data: profits,
-                    borderColor: CONFIG.COLORS.info,
-                    backgroundColor: 'rgba(96, 165, 250, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                },
-                {
-                    label: '5-Trade MA',
-                    data: movingAvg,
-                    borderColor: CONFIG.COLORS.warning,
-                    backgroundColor: 'transparent',
-                    borderWidth: 3,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    borderDash: [5, 5]
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: '#b0b7c3',
-                        font: { size: 14, weight: '600' }
-                    }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(20, 25, 45, 0.95)',
-                    titleColor: CONFIG.COLORS.primary,
-                    bodyColor: '#fff',
-                    borderColor: CONFIG.COLORS.primary,
-                    borderWidth: 1,
-                    padding: 12,
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        color: '#8892a6',
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                },
-                x: {
-                    ticks: {
-                        color: '#8892a6'
-                    },
-                    grid: {
-                        color: 'rgba(255,255,255,0.05)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update all charts
-function updateAllCharts(trades) {
-    if (!trades || trades.length === 0) return;
-    
-    updateEquityCurveChart(trades);
-    updatePLDistributionChart(trades);
-    updateWinLossChart(trades);
-    updateDurationChart(trades);
-    updateTradeTypeChart(trades);
-    updateStreakChart(trades);
-    updatePLTrendChart(trades);
-}
-
-// Update all data
-async function updateAll() {
-    debug('Updating all data...');
-    await Promise.all([
-        updateLiveStats(),
-        updateTradeHistory()
-    ]);
-    debug('All data updated');
-}
-
-// Initialize dashboard
-function initDashboard() {
-    debug('Initializing dashboard...');
-    
-    // Set Chart.js defaults
-    Chart.defaults.color = '#b0b7c3';
-    Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
-    Chart.defaults.font.family = "'Inter', sans-serif";
-    
-    // Initial update
-    updateAll();
-    
-    // Set up auto-update
-    if (updateInterval) {
-        clearInterval(updateInterval);
-    }
-    
-    updateInterval = setInterval(() => {
-        updateAll();
+    // Start new interval
+    statsUpdateInterval = setInterval(() => {
+        updateAllData();
     }, CONFIG.UPDATE_INTERVAL);
     
-    debug(`Auto-update enabled (${CONFIG.UPDATE_INTERVAL}ms interval)`);
+    console.log(`✓ Auto-update enabled (${CONFIG.UPDATE_INTERVAL}ms)`);
 }
 
-// Start dashboard when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Gold HyperFlow Scalper Dashboard - Initializing...');
-    console.log('Google Script URL:', CONFIG.GOOGLE_SCRIPT_URL);
-    
-    initDashboard();
-    
-    // Handle visibility change to pause/resume updates
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            debug('Page hidden - pausing updates');
-            if (updateInterval) {
-                clearInterval(updateInterval);
-            }
-        } else {
-            debug('Page visible - resuming updates');
-            initDashboard();
-        }
-    });
-});
+function stopAutoUpdate() {
+    if (statsUpdateInterval) {
+        clearInterval(statsUpdateInterval);
+        statsUpdateInterval = null;
+    }
+    console.log('✓ Auto-update paused');
+}
 
-// Handle errors globally
+function handleVisibilityChange() {
+    if (document.hidden) {
+        stopAutoUpdate();
+    } else {
+        updateAllData();
+        startAutoUpdate();
+    }
+}
+
+/* ==========================================
+   ERROR HANDLING
+   ========================================== */
+
 window.addEventListener('error', function(event) {
-    console.error('Dashboard error:', event.error);
+    console.error('Dashboard Error:', event.error);
 });
 
 window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
+    console.error('Unhandled Promise:', event.reason);
 });
+
+// Make functions global for inline onclick handlers
+window.toggleChartPause = toggleChartPause;
+window.resetChart = resetChart;
