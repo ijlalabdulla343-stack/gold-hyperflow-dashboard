@@ -1,6 +1,6 @@
 /**
  * Gold HyperFlow Scalper - Advanced Dashboard
- * Version: 3.0 - Real-Time Streaming
+ * Version: 3.1 - Complete Historical + Live Real-Time
  */
 
 // Global chart instances
@@ -15,14 +15,17 @@ let chartPaused = false;
 // Data cache
 let equityData = [];
 let lastUpdateTime = null;
+let historicalLoaded = false;
+let viewMode = 'live'; // 'live' or 'history'
+let allHistoricalData = { balance: [], equity: [] }; // Store all historical data
 
 /* ==========================================
-   INITIALIZATION
-   ========================================== */
+    INITIALIZATION
+    ========================================== */
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('%c🚀 Gold HyperFlow Scalper Dashboard', 'color: #1a73e8; font-size: 24px; font-weight: bold');
-    console.log('%c📊 Version 3.0 - Real-Time Analytics', 'color: #34a853; font-size: 14px');
+    console.log('%c📊 Version 3.1 - Historical + Live Analytics', 'color: #34a853; font-size: 14px');
     console.log('%c🔗 Script URL:', 'color: #fbbc04', CONFIG.GOOGLE_SCRIPT_URL);
     
     // Initialize Chart.js defaults
@@ -46,8 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ==========================================
-   CHART INITIALIZATION
-   ========================================== */
+    CHART INITIALIZATION
+    ========================================== */
 
 function initChartDefaults() {
     Chart.defaults.color = '#8b949e';
@@ -60,8 +63,8 @@ function initChartDefaults() {
 }
 
 /* ==========================================
-   REAL-TIME EQUITY CHART
-   ========================================== */
+    REAL-TIME EQUITY CHART WITH HISTORICAL DATA
+    ========================================== */
 
 function createEquityChart() {
     const ctx = document.getElementById('equityChart');
@@ -135,7 +138,9 @@ function createEquityChart() {
                     callbacks: {
                         title: function(context) {
                             const date = new Date(context[0].parsed.x);
-                            return date.toLocaleTimeString('en-US', {
+                            return date.toLocaleString('en-US', {
+                                month: '2-digit',
+                                day: '2-digit',
                                 hour: '2-digit',
                                 minute: '2-digit',
                                 second: '2-digit'
@@ -151,7 +156,7 @@ function createEquityChart() {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'second',
+                        unit: 'minute',
                         displayFormats: {
                             second: 'HH:mm:ss',
                             minute: 'HH:mm',
@@ -163,7 +168,9 @@ function createEquityChart() {
                         font: {
                             size: 11
                         },
-                        maxRotation: 0
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 10
                     },
                     grid: {
                         color: 'rgba(48, 54, 61, 0.5)',
@@ -195,30 +202,166 @@ function createEquityChart() {
     });
 }
 
+async function loadHistoricalEquity() {
+    if (historicalLoaded) return;
+    
+    console.log('📥 Loading historical equity data...');
+    
+    try {
+        const trades = await fetchData('getTradeHistory&limit=100');
+        
+        if (!trades || trades.length === 0) {
+            console.log('ℹ️ No historical trades found');
+            historicalLoaded = true;
+            return;
+        }
+        
+        // Sort by close time
+        trades.sort((a, b) => {
+            return new Date(a['Close Time']) - new Date(b['Close Time']);
+        });
+        
+        // Build cumulative equity curve
+        let cumBalance = 0;
+        let cumEquity = 0;
+        
+        // Clear stored data
+        allHistoricalData.balance = [];
+        allHistoricalData.equity = [];
+        
+        trades.forEach(trade => {
+            const profit = parseFloat(trade.Profit) || 0;
+            cumBalance += profit;
+            cumEquity += profit;
+            
+            const closeTime = new Date(trade['Close Time']).getTime();
+            
+            allHistoricalData.balance.push({
+                x: closeTime,
+                y: cumBalance
+            });
+            
+            allHistoricalData.equity.push({
+                x: closeTime,
+                y: cumEquity
+            });
+        });
+        
+        // Only show recent data initially (live view)
+        applyViewMode();
+        
+        historicalLoaded = true;
+        
+        console.log(`✅ Loaded ${trades.length} historical equity points`);
+        
+    } catch (error) {
+        console.error('❌ Error loading historical data:', error);
+        historicalLoaded = true;
+    }
+}
+
+function applyViewMode() {
+    if (!equityChart) return;
+    
+    if (viewMode === 'history') {
+        // Show ALL historical data
+        equityChart.data.datasets[0].data = [...allHistoricalData.balance];
+        equityChart.data.datasets[1].data = [...allHistoricalData.equity];
+    } else {
+        // Show only recent data (last 1 minute performance)
+        const cutoffTime = Date.now() - (60 * 1000); // 1 minute in milliseconds
+        
+        // Filter the data arrays to include only points newer than the cutoff time
+        const balanceData = allHistoricalData.balance.filter(point => point.x >= cutoffTime);
+        const equityData = allHistoricalData.equity.filter(point => point.x >= cutoffTime);
+
+        equityChart.data.datasets[0].data = [...balanceData];
+        equityChart.data.datasets[1].data = [...equityData];
+    }
+    
+    equityChart.update();
+    updateViewButtons();
+}
+
 function updateEquityChart(balance, equity) {
     if (!equityChart || chartPaused) return;
     
     const now = Date.now();
+    const currentBalance = parseFloat(balance) || 0;
+    const currentEquity = parseFloat(equity) || 0;
     
-    // Add data point
-    equityChart.data.datasets[0].data.push({
+    // Add new live data point to historical storage
+    allHistoricalData.balance.push({
         x: now,
-        y: parseFloat(balance) || 0
+        y: currentBalance
     });
     
-    equityChart.data.datasets[1].data.push({
+    allHistoricalData.equity.push({
         x: now,
-        y: parseFloat(equity) || 0
+        y: currentEquity
     });
     
-    // Keep only last 100 points for performance
-    if (equityChart.data.datasets[0].data.length > 100) {
-        equityChart.data.datasets[0].data.shift();
-        equityChart.data.datasets[1].data.shift();
+    // Keep reasonable number of points in storage (e.g., last 15 minutes of data points if updating every 1 sec)
+    if (allHistoricalData.balance.length > 900) {
+        allHistoricalData.balance.shift();
+        allHistoricalData.equity.shift();
     }
     
-    // Update chart
-    equityChart.update('none'); // Use 'none' mode for smooth updates
+    // Update chart based on current view mode
+    if (viewMode === 'history') {
+        // In history mode, show all data
+        equityChart.data.datasets[0].data = [...allHistoricalData.balance];
+        equityChart.data.datasets[1].data = [...allHistoricalData.equity];
+    } else {
+        // In live mode, show recent minute performance
+        const cutoffTime = Date.now() - (60 * 1000); // 1 minute in milliseconds
+
+        const recentBalanceData = allHistoricalData.balance.filter(point => point.x >= cutoffTime);
+        const recentEquityData = allHistoricalData.equity.filter(point => point.x >= cutoffTime);
+        
+        equityChart.data.datasets[0].data = [...recentBalanceData];
+        equityChart.data.datasets[1].data = [...recentEquityData];
+    }
+    
+    // Update chart smoothly
+    equityChart.update('none');
+}
+
+function switchToHistory() {
+    viewMode = 'history';
+    applyViewMode();
+    console.log('📊 Switched to Full History view');
+}
+
+function switchToLive() {
+    viewMode = 'live';
+    applyViewMode();
+    console.log('🔴 Switched to Live view');
+}
+
+function updateViewButtons() {
+    const historyBtn = document.getElementById('historyViewBtn');
+    const liveBtn = document.getElementById('liveViewBtn');
+    
+    if (!historyBtn || !liveBtn) return;
+    
+    if (viewMode === 'history') {
+        historyBtn.style.background = 'var(--bg-tertiary)';
+        historyBtn.style.color = 'var(--primary)';
+        historyBtn.style.borderColor = 'var(--primary)';
+        
+        liveBtn.style.background = 'transparent';
+        liveBtn.style.color = 'var(--text-secondary)';
+        liveBtn.style.borderColor = 'var(--border-color)';
+    } else {
+        liveBtn.style.background = 'var(--bg-tertiary)';
+        liveBtn.style.color = 'var(--success)';
+        liveBtn.style.borderColor = 'var(--success)';
+        
+        historyBtn.style.background = 'transparent';
+        historyBtn.style.color = 'var(--text-secondary)';
+        historyBtn.style.borderColor = 'var(--border-color)';
+    }
 }
 
 function toggleChartPause() {
@@ -240,7 +383,14 @@ function resetChart() {
     
     equityChart.data.datasets[0].data = [];
     equityChart.data.datasets[1].data = [];
+    allHistoricalData.balance = [];
+    allHistoricalData.equity = [];
+    historicalLoaded = false;
+    viewMode = 'live'; // Reset to live view
     equityChart.update();
+    
+    // Reload historical data
+    loadHistoricalEquity();
     
     // Show reset animation
     const btn = event.target.closest('.btn-icon');
@@ -251,8 +401,8 @@ function resetChart() {
 }
 
 /* ==========================================
-   TRADES BAR CHART
-   ========================================== */
+    TRADES BAR CHART
+    ========================================== */
 
 function createTradesChart() {
     const ctx = document.getElementById('tradesChart');
@@ -355,8 +505,8 @@ function updateTradesChart(trades) {
 }
 
 /* ==========================================
-   PIE CHART
-   ========================================== */
+    PIE CHART
+    ========================================== */
 
 function createPieChart() {
     const ctx = document.getElementById('pieChart');
@@ -427,8 +577,8 @@ function updatePieChart(wins, losses) {
 }
 
 /* ==========================================
-   DATA FETCHING
-   ========================================== */
+    DATA FETCHING
+    ========================================== */
 
 async function fetchData(action) {
     try {
@@ -454,8 +604,8 @@ async function fetchData(action) {
 }
 
 /* ==========================================
-   DATA UPDATES
-   ========================================== */
+    DATA UPDATES
+    ========================================== */
 
 async function updateLiveStats() {
     const stats = await fetchData('getLiveStats');
@@ -466,6 +616,11 @@ async function updateLiveStats() {
     }
     
     updateConnectionStatus(true);
+    
+    // Load historical data on first successful connection
+    if (!historicalLoaded) {
+        await loadHistoricalEquity();
+    }
     
     // Update quick stats
     document.getElementById('balance').textContent = formatCurrency(stats.Balance);
@@ -491,7 +646,7 @@ async function updateLiveStats() {
     // Update last trade
     updateLastTrade(stats['Last Trade Direction'], stats['Last Trade Profit']);
     
-    // Update equity chart
+    // Update equity chart with live data
     updateEquityChart(stats.Balance, stats.Equity);
     
     // Update pie chart
@@ -552,8 +707,8 @@ async function updateAllData() {
 }
 
 /* ==========================================
-   UI HELPERS
-   ========================================== */
+    UI HELPERS
+    ========================================== */
 
 function updateConnectionStatus(connected) {
     const dot = document.getElementById('statusDot');
@@ -621,8 +776,8 @@ function updateLastUpdateTime() {
 }
 
 /* ==========================================
-   FORMATTING HELPERS
-   ========================================== */
+    FORMATTING HELPERS
+    ========================================== */
 
 function formatCurrency(value) {
     const num = parseFloat(value) || 0;
@@ -658,8 +813,8 @@ function formatDuration(seconds) {
 }
 
 /* ==========================================
-   AUTO-UPDATE SYSTEM
-   ========================================== */
+    AUTO-UPDATE SYSTEM
+    ========================================== */
 
 function startAutoUpdate() {
     // Clear any existing interval
@@ -693,8 +848,8 @@ function handleVisibilityChange() {
 }
 
 /* ==========================================
-   ERROR HANDLING
-   ========================================== */
+    ERROR HANDLING
+    ========================================== */
 
 window.addEventListener('error', function(event) {
     console.error('Dashboard Error:', event.error);
@@ -707,3 +862,5 @@ window.addEventListener('unhandledrejection', function(event) {
 // Make functions global for inline onclick handlers
 window.toggleChartPause = toggleChartPause;
 window.resetChart = resetChart;
+window.switchToHistory = switchToHistory;
+window.switchToLive = switchToLive;
