@@ -433,6 +433,37 @@ body {
 .chart-controls {
     display: flex;
     gap: 8px;
+    align-items: center;
+}
+
+.btn-view {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: 'Roboto', sans-serif;
+}
+
+.btn-view:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-hover);
+    transform: translateY(-2px);
+}
+
+.btn-view .material-icons {
+    font-size: 18px;
+}
+
+.btn-view:active {
+    transform: translateY(0);
 }
 
 .btn-icon {
@@ -803,6 +834,27 @@ body {
         padding: 20px;
     }
     
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .chart-controls {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    
+    .btn-view {
+        font-size: 11px;
+        padding: 6px 12px;
+    }
+    
+    .btn-view .material-icons {
+        font-size: 16px;
+    }
+    
     .table-section {
         padding: 20px;
     }
@@ -831,6 +883,24 @@ body {
     
     .perf-value {
         font-size: 28px;
+    }
+    
+    .chart-controls {
+        gap: 6px;
+    }
+    
+    .btn-view {
+        font-size: 10px;
+        padding: 5px 10px;
+        gap: 4px;
+    }
+    
+    .btn-view .material-icons {
+        font-size: 14px;
+    }
+    
+    .btn-view span:last-child {
+        display: none;
     }
 }
 
