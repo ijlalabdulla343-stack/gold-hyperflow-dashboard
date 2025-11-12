@@ -205,13 +205,59 @@ function createEquityChart() {
 async function loadHistoricalEquity() {
     if (historicalLoaded) return;
     
-    console.log('📊 Skipping historical equity calculation - using live data only');
+    console.log('📥 Loading historical equity data...');
     
-    // Clear stored data - wait for live data instead
-    allHistoricalData.balance = [];
-    allHistoricalData.equity = [];
-    
-    historicalLoaded = true;
+    try {
+        const trades = await fetchData('getTradeHistory&limit=100');
+        
+        if (!trades || trades.length === 0) {
+            console.log('ℹ️ No historical trades found');
+            historicalLoaded = true;
+            return;
+        }
+        
+        // Sort by close time
+        trades.sort((a, b) => {
+            return new Date(a['Close Time']) - new Date(b['Close Time']);
+        });
+        
+        // Build cumulative equity curve
+        let cumBalance = 0;
+        let cumEquity = 0;
+        
+        // Clear stored data
+        allHistoricalData.balance = [];
+        allHistoricalData.equity = [];
+        
+        trades.forEach(trade => {
+            const profit = parseFloat(trade.Profit) || 0;
+            cumBalance += profit;
+            cumEquity += profit;
+            
+            const closeTime = new Date(trade['Close Time']).getTime();
+            
+            allHistoricalData.balance.push({
+                x: closeTime,
+                y: cumBalance
+            });
+            
+            allHistoricalData.equity.push({
+                x: closeTime,
+                y: cumEquity
+            });
+        });
+        
+        // Only show recent data initially (live view)
+        applyViewMode();
+        
+        historicalLoaded = true;
+        
+        console.log(`✅ Loaded ${trades.length} historical equity points`);
+        
+    } catch (error) {
+        console.error('❌ Error loading historical data:', error);
+        historicalLoaded = true;
+    }
 }
 
 function applyViewMode() {
