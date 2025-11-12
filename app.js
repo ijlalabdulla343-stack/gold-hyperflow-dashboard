@@ -222,30 +222,13 @@ async function loadHistoricalEquity() {
         });
         
         // Build cumulative equity curve
-        let cumBalance = 0;
-        let cumEquity = 0;
-        
-        // Clear stored data
+        // Clear stored data - DON'T calculate from trades, wait for live data
         allHistoricalData.balance = [];
         allHistoricalData.equity = [];
-        
-        trades.forEach(trade => {
-            const profit = parseFloat(trade.Profit) || 0;
-            cumBalance += profit;
-            cumEquity += profit;
-            
-            const closeTime = new Date(trade['Close Time']).getTime();
-            
-            allHistoricalData.balance.push({
-                x: closeTime,
-                y: cumBalance
-            });
-            
-            allHistoricalData.equity.push({
-                x: closeTime,
-                y: cumEquity
-            });
-        });
+
+        // Don't build cumulative curve from old trades
+        // The equity curve will be populated by live data only
+        console.log('Historical trades loaded, waiting for live equity data...');
         
         // Only show recent data initially (live view)
         applyViewMode();
