@@ -205,42 +205,13 @@ function createEquityChart() {
 async function loadHistoricalEquity() {
     if (historicalLoaded) return;
     
-    console.log('📥 Loading historical equity data...');
+    console.log('📊 Skipping historical equity calculation - using live data only');
     
-    try {
-        const trades = await fetchData('getTradeHistory&limit=100');
-        
-        if (!trades || trades.length === 0) {
-            console.log('ℹ️ No historical trades found');
-            historicalLoaded = true;
-            return;
-        }
-        
-        // Sort by close time
-        trades.sort((a, b) => {
-            return new Date(a['Close Time']) - new Date(b['Close Time']);
-        });
-        
-        // Build cumulative equity curve
-        // Clear stored data - DON'T calculate from trades, wait for live data
-        allHistoricalData.balance = [];
-        allHistoricalData.equity = [];
-
-        // Don't build cumulative curve from old trades
-        // The equity curve will be populated by live data only
-        console.log('Historical trades loaded, waiting for live equity data...');
-        
-        // Only show recent data initially (live view)
-        applyViewMode();
-        
-        historicalLoaded = true;
-        
-        console.log(`✅ Loaded ${trades.length} historical equity points`);
-        
-    } catch (error) {
-        console.error('❌ Error loading historical data:', error);
-        historicalLoaded = true;
-    }
+    // Clear stored data - wait for live data instead
+    allHistoricalData.balance = [];
+    allHistoricalData.equity = [];
+    
+    historicalLoaded = true;
 }
 
 function applyViewMode() {
